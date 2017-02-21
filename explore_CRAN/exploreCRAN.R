@@ -3,6 +3,7 @@ library(dygraphs)
 library(xts)
 library(cranlogs)
 library(dplyr)
+library(timevis)
 
 #
 # Get data on cran packages by first release date
@@ -10,7 +11,8 @@ library(dplyr)
 # http://blog.revolutionanalytics.com/2017/01/cran-10000.html
 # https://gist.github.com/daroczig/3cf06d6db4be2bbe3368
 #
-# The data is until Jan 2017 and is used directly for the analysis here
+# The data is until Jan 2016 and is used directly for the analysis here
+# But the gist also has the code to get the latest data if needed
 #
 
 pkgs = read.csv("https://gist.githubusercontent.com/daroczig/3cf06d6db4be2bbe3368/raw/8e970fad675d443813be2c98c508e6224491495e/results.csv", stringsAsFactors = FALSE)
@@ -32,9 +34,10 @@ dygraph(pkgs_xts) %>% dyRangeSelector()
 
 # overlay events on timeline. Here key events from R timeline are used
 # these are just sample key events in the timeline of R and not meant to be exhaustive
-evnts = read.csv("data/Revents.csv", stringsAsFactors = FALSE)
+evnts = read.csv("explore_CRAN/data/Revents.csv", stringsAsFactors = FALSE)
 evnts$dt = as.Date(evnts$evntDate)
 
+# Dygraph plot of cran packages over time with R key events timeline overlayed on it
 p = dygraph(pkgs_xts)
 for(i in 1:nrow(evnts)){
   p = p %>% dyEvent(evnts$dt[i],evnts$event[i],labelLoc = "bottom")
@@ -45,6 +48,19 @@ p
 downlds = cran_downloads(from = "2012-10-01", to = "2017-01-31")
 downlds_xts = as.xts(downlds$count, order.by = downlds$date)
 
+dygraph(downlds_xts)
+
+subpkg_dwnlds = cran_downloads(package = c("Rcpp","ggplot2","RColorBrewer"), 
+                               from = "2014-01-01",to = "2017-01-31")
+Rcpp_xts = as.xts(subpkg_dwnlds$count[subpkg_dwnlds$package == "Rcpp"], order.by = subpkg_dwnlds$date[subpkg_dwnlds$package == "Rcpp"])
+ggplot2_xts = as.xts(subpkg_dwnlds$count[subpkg_dwnlds$package == "ggplot2"], order.by = subpkg_dwnlds$date[subpkg_dwnlds$package == "ggplot2"])
+RColorBrewer_xts = as.xts(subpkg_dwnlds$count[subpkg_dwnlds$package == "RColorBrewer"], order.by = subpkg_dwnlds$date[subpkg_dwnlds$package == "RColorBrewer"])
+
+subpkg_xts = cbind(Rcpp_xts, ggplot2_xts, RColorBrewer_xts)
+names(subpkg_xts) = c("Rcpp","ggplot2","RColorBrewer")
+dygraph(subpkg_xts) %>% dyHighlight(highlightSeriesOpts = list(strokeWidth = 3))
+
+# Timeline of packages in rank 1-5 using timevis
 top100 = cran_top_downloads("last-month", count = 100)
 top100_dwnlds = cran_downloads(package = top100$package, from = "2014-10-01",to = "2017-01-31")
 top100_dwnlds$wk = floor_date(top100_dwnlds$date, unit = "week")
@@ -62,7 +78,7 @@ top100_dwnlds_wk = top100_dwnlds_wk %>% group_by(rnk) %>% mutate(recnum = cumsum
 top100_dwnlds_wk2 = top100_dwnlds_wk %>% group_by(rnk, recnum, package) %>%
                     summarize(startdt = min(wk),enddt = max(wk)+6)
 
-library(timevis)
+
 
 timeplt = data.frame(content = top100_dwnlds_wk2$package, 
                      start = top100_dwnlds_wk2$startdt,
@@ -76,12 +92,3 @@ groups = data.frame(id = c(1,2,3,4,5),
 
 timevis(timeplt, groups = groups)
 
-subpkg_dwnlds = cran_downloads(package = c("Rcpp","ggplot2","RColorBrewer"), 
-                               from = "2014-01-01",to = "2017-01-31")
-Rcpp_xts = as.xts(subpkg_dwnlds$count[subpkg_dwnlds$package == "Rcpp"], order.by = subpkg_dwnlds$date[subpkg_dwnlds$package == "Rcpp"])
-ggplot2_xts = as.xts(subpkg_dwnlds$count[subpkg_dwnlds$package == "ggplot2"], order.by = subpkg_dwnlds$date[subpkg_dwnlds$package == "ggplot2"])
-RColorBrewer_xts = as.xts(subpkg_dwnlds$count[subpkg_dwnlds$package == "RColorBrewer"], order.by = subpkg_dwnlds$date[subpkg_dwnlds$package == "RColorBrewer"])
-
-subpkg_xts = cbind(Rcpp_xts, ggplot2_xts, RColorBrewer_xts)
-names(subpkg_xts) = c("Rcpp","ggplot2","RColorBrewer")
-dygraph(subpkg_xts) %>% dyHighlight(highlightSeriesOpts = list(strokeWidth = 3))
